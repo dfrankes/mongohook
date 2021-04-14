@@ -1,4 +1,7 @@
 # A lightweight MongoDB Hook module for node
+## Tested with the following
+mongodb https://www.npmjs.com/package/mongodb/v/3.6.6
+Meteor 1.10.1 or above
 
 ### Usage
 
@@ -15,8 +18,6 @@ mongohook.hook(mongodb, {options});
 
 Create a beforeHook for the collection mycollection
 ```js
-// Connect to mongodb
-// client = mongodb.MongoClient('mongodb://')
 client.collection('mycollection').before('insertMany', (query) => {
     return {createdAt: new Date()};
 });
