@@ -18,8 +18,9 @@ mongohook.hook(mongodb, {options});
 
 Create a beforeHook for the collection mycollection
 ```js
-client.collection('mycollection').before('insertMany', (query) => {
-    return {createdAt: new Date()};
+client.collection('mycollection').before('insertOne', (query) => {
+    query.createdAt = new Date();
+    return query;
 });
 ```
 ___
@@ -35,8 +36,8 @@ ___
 | hook        |
 | -----------:|
 | insert      |
+| insertOne   |
 | insertMany  |
 | updateOne   |
 | updateMany  |
 | replaceOne  |
-| insertOne   |

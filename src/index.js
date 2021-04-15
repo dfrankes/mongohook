@@ -8,7 +8,7 @@ module.exports = {
     hook: (mongodb, options) => {
 
         // Setup our hook methods in the mongodb Collection class
-        const hooks = ['insert', 'insertMany', 'updateOne', 'updateMany', 'replaceOne', 'insertOne'];
+        const hooks = ['insert', 'insertOne', 'updateOne', 'replaceOne', 'update', 'insertMany', 'updateMany'];
 
         // Register mongohook callbacks into the prototype
         mongodb.Collection.prototype.before = function (hook, callback) {
@@ -39,7 +39,7 @@ module.exports = {
                 hookResult = instance.hooks_before[hook](query);
                 if (typeof hookResult !== 'object') throw new Error('Hook result must be a object!');
             } else {
-                return;
+                return query;
             }
 
             if (options && options.idStrategy) {
@@ -57,14 +57,41 @@ module.exports = {
                         // Check for Meteor, this is to make the package work in Meteor
                         let hooksLocation = (typeof Meteor === 'object' ? this.hooks_before : this.s.pkFactory.hooks_before);
                         if (hooksLocation && hooksLocation[hook]) {
+                            let hookResult;
+                            
                             switch (hook) {
-                                case 'insert': case 'updateOne': case 'replaceOne': case 'insertOne':
-                                    Object.assign(args[0], validateHookResult(hook, this, args[0]));
-                                default:
-                                    for (let index = 0; index < args[0].length; index++) {
-                                        Object.assign(args[0][index], validateHookResult(hook, this, args[0][index]));
+
+                                case 'insert': case 'insertOne':
+                                    hookResult = validateHookResult(hook, this, args[0]);
+                                    if(hookResult){
+                                        args[0] = hookResult;
                                     }
-                                    break;
+                                break;
+                                case 'updateOne': case 'replaceOne': case 'update':
+                                    hookResult = validateHookResult(hook, this, args[1]);
+                                    if(hookResult){
+                                        args[1] = hookResult
+                                    }
+                                break;
+                                case 'insertMany':
+                                    for (let index = 0; index < args[0].length; index++) {
+                                        hookResult = validateHookResult(hook, this, args[0][index]);
+                                        if(hookResult){
+                                            args[0][index] = hookResult;
+                                        }
+                                    }
+                                break;
+                                case 'updateMany':
+                                    for (let index = 0; index < args[1].length; index++) {
+                                        hookResult = validateHookResult(hook, this, args[1][index]);
+                                        if(hookResult){
+                                            args[1][index] = hookResult;
+                                        }
+                                    }
+                                break;
+                                default:
+
+                                break;
                             }
                         }
                         return _super.apply(this, args);
