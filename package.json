@@ -1,6 +1,6 @@
 {
   "name": "@dfrankes/mongohook",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A lightweight MongoDB hook module for node",
   "main": "src/index.js",
   "scripts": {
@@ -20,5 +20,6 @@
     "after"
   ],
   "author": "Davy Frankes",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {}
 }

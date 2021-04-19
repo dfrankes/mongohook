@@ -1,105 +1,83 @@
-/**
- * TODO: Make hooks less package specific
- * For now we have a "hacky" fix to make this package also work for meteor
- * this will change later in the future.
- */
+class MongoHook {
+    hooks = ['insert', 'insertOne', 'updateOne', 'replaceOne', 'update', 'insertMany', 'updateMany'];
+    hookStorage = {
+        before: {},
+        after: {}
+    };
 
-module.exports = {
-    hook: (mongodb, options) => {
+    constructor(driver, options = {}) {
+        // Return hooked driver
+        return this._hookMongo(driver, options);
+    }
 
-        // Setup our hook methods in the mongodb Collection class
-        const hooks = ['insert', 'insertOne', 'updateOne', 'replaceOne', 'update', 'insertMany', 'updateMany'];
+    _hookMongo = (driver, options) => {
 
-        // Register mongohook callbacks into the prototype
-        mongodb.Collection.prototype.before = function (hook, callback) {
-            if (!hooks.includes(hook)) throw new Error(`Unknown hook ${hook}`);
+        // Validate if the user provided a valid Mongo npm package
+        if(typeof driver.MongoClient !== "function") throw new Error('You must provide a valid mongodb driver https://www.npmjs.com/package/mongodb include')
 
-            // Check for Meteor, this is to make the package work in Meteor
-            if (typeof Meteor === 'object') {
-                if (!this.hooks_before) {
-                    this.hooks_before = {};
-                    this.hooks_before[hook] = callback;
-                }
-            } else {
-                if (!this.s.pkFactory.hooks_before) {
-                    this.s.pkFactory.hooks_before = {};
-                }
-                this.s.pkFactory.hooks_before[hook] = callback;
-            }
+        // Create our driver prototype
+        driver.Collection.prototype.MongoHook = this;
+
+        // Create before hook
+        driver.Collection.prototype.before = function(method, callback){
+            const nameSpace = this.namespace;
+
+            // Create namespace container
+            if(!this.MongoHook.hookStorage.before[nameSpace]) this.MongoHook.hookStorage.before[nameSpace] = {};
+
+            // Register hook for given namespace
+            this.MongoHook.hookStorage.before[nameSpace][method] = callback;
         }
 
 
-        validateHookResult = (hook, instance, query) => {
-            let hookResult;
+        // Create after hook
+        driver.Collection.prototype.after = function(method, callback){
+            const nameSpace = this.namespace;
 
-            if (instance && instance.s && instance.s.pkFactory) {
-                hookResult = instance.s.pkFactory.hooks_before[hook](query);
-                if (typeof hookResult !== 'object') throw new Error('Hook result must be a object!');
-            } else if (instance.hooks_before) {
-                hookResult = instance.hooks_before[hook](query);
-                if (typeof hookResult !== 'object') throw new Error('Hook result must be a object!');
-            } else {
-                return query;
-            }
+            // Create namespace container
+            if(!this.MongoHook.hookStorage.after[nameSpace]) this.MongoHook.hookStorage.after[nameSpace] = {};
 
-            if (options && options.idStrategy) {
-                Object.assign(hookResult, { _id: options.idStrategy() });
-            }
-            return hookResult;
+            // Register hook for given namespace
+            this.MongoHook.hookStorage.after[nameSpace][method] = callback;
         }
 
-        hooks.forEach(hook => {
-            const _super = mongodb.Collection.prototype[hook];
+        // Register function hooks
+        this.hooks.forEach(hook => {
+            let _super = driver.Collection.prototype[hook];
             if (typeof _super === "function") {
 
-                try {
-                    mongodb.Collection.prototype[hook] = function (...args) {
-                        // Check for Meteor, this is to make the package work in Meteor
-                        let hooksLocation = (typeof Meteor === 'object' ? this.hooks_before : this.s.pkFactory.hooks_before);
-                        if (hooksLocation && hooksLocation[hook]) {
-                            let hookResult;
-                            
-                            switch (hook) {
+                driver.Collection.prototype[hook] = async function () {
+                    let args = arguments;
+                    const nameSpace = this.namespace;
+                    if(this.MongoHook && this.MongoHook.hookStorage && this.MongoHook.hookStorage.before[nameSpace] && this.MongoHook.hookStorage.before[nameSpace][hook]){
 
-                                case 'insert': case 'insertOne':
-                                    hookResult = validateHookResult(hook, this, args[0]);
-                                    if(hookResult){
-                                        args[0] = hookResult;
-                                    }
-                                break;
-                                case 'updateOne': case 'replaceOne': case 'update':
-                                    hookResult = validateHookResult(hook, this, args[1]);
-                                    if(hookResult){
-                                        args[1] = hookResult
-                                    }
-                                break;
-                                case 'insertMany':
-                                    for (let index = 0; index < args[0].length; index++) {
-                                        hookResult = validateHookResult(hook, this, args[0][index]);
-                                        if(hookResult){
-                                            args[0][index] = hookResult;
-                                        }
-                                    }
-                                break;
-                                case 'updateMany':
-                                    for (let index = 0; index < args[1].length; index++) {
-                                        hookResult = validateHookResult(hook, this, args[1][index]);
-                                        if(hookResult){
-                                            args[1][index] = hookResult;
-                                        }
-                                    }
-                                break;
-                                default:
-
-                                break;
-                            }
+                        // Execute callback with args
+                        // User should modify the args and return them, we will set them back as the original args if validated
+                        // This is to make sure the user will be able to modify anything
+                        // and there wont be a need for me to write method specific code ^^
+                        const callback = this.MongoHook.hookStorage.before[nameSpace][hook](args);
+                        if(callback && typeof args === typeof callback){
+                            args = callback;
                         }
-                        return _super.apply(this, args);
+
+                        const _call = _super.apply(this, args);
+
+                        // Check if we need to run a after hook
+                        if(this.MongoHook.hookStorage.after[nameSpace] && this.MongoHook.hookStorage.after[nameSpace][hook]){
+                            this.MongoHook.hookStorage.after[nameSpace][hook](_call);
+                        }
+                        return _call;
                     }
-                } catch (error) {
-                    console.log(error);
+                    return _super.apply(this, args);
                 }
+            }else{
+                throw new Error(`unable to hook mongodb package @ driver.Collection.prototype.${hook}`)
             }
         })
+
+        // return the driver back to the user
+        return driver;
     }
 }
+
+module.exports = MongoHook;
