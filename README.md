@@ -30,9 +30,6 @@ Create a before hgook for the collection mycollection
 client.collection('mycollection').before('insertOne', (args) => {
     // args is an array with all the original method arguments
     // You can for example modify a insertOne query like this
-    // The query you execute will look like this db.mycollection.insertOne({hello: 'world})
-    // Now you if you want to for example add a createdAt date you can do it like this 
-    // since index 0 contains the object to insert 
     args['0'].createdAt = new Date();
 
     // return the original arguments
